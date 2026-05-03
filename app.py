@@ -9,6 +9,36 @@ import os
 app = Flask(__name__)
 CORS(app)
 
+# 🔥 AUTO BRIGHTNESS + CONTRAST (adaptive)
+def auto_brightness_contrast(image, clip_hist_percent=1):
+    gray = cv2.cvtColor(image, cv2.COLOR_RGB2GRAY)
+
+    hist = cv2.calcHist([gray],[0],None,[256],[0,256])
+    hist_size = len(hist)
+
+    accumulator = []
+    accumulator.append(float(hist[0]))
+
+    for i in range(1, hist_size):
+        accumulator.append(accumulator[i-1] + float(hist[i]))
+
+    maximum = accumulator[-1]
+    clip_hist_percent *= (maximum/100.0)
+    clip_hist_percent /= 2.0
+
+    minimum_gray = 0
+    while accumulator[minimum_gray] < clip_hist_percent:
+        minimum_gray += 1
+
+    maximum_gray = hist_size - 1
+    while accumulator[maximum_gray] >= (maximum - clip_hist_percent):
+        maximum_gray -= 1
+
+    alpha = 255 / (maximum_gray - minimum_gray)
+    beta = -minimum_gray * alpha
+
+    return cv2.convertScaleAbs(image, alpha=alpha, beta=beta)
+
 # 🎬 Vignette
 def apply_vignette(img):
     rows, cols = img.shape[:2]
@@ -27,18 +57,19 @@ def sharpen(img):
     kernel = np.array([[0,-1,0],[-1,5,-1],[0,-1,0]])
     return cv2.filter2D(img, -1, kernel)
 
-# 🔥 Main enhance
+# 🚀 MAIN ENHANCE FUNCTION
 def enhance_image(image, style="Normal"):
     img = np.array(image)
 
-    # base enhance
-    img = cv2.convertScaleAbs(img, alpha=1.2, beta=20)
+    # 🔥 Smart brightness/contrast
+    img = auto_brightness_contrast(img)
 
+    # 🎨 Controlled saturation
     hsv = cv2.cvtColor(img, cv2.COLOR_RGB2HSV)
-    hsv[:,:,1] = np.clip(hsv[:,:,1]*1.3, 0, 255)
+    hsv[:,:,1] = np.clip(hsv[:,:,1] * 1.2, 0, 255)
     img = cv2.cvtColor(hsv, cv2.COLOR_HSV2RGB)
 
-    # styles
+    # 🎭 Styles
     if style == "Cinematic":
         img = apply_vignette(img)
 
@@ -46,16 +77,21 @@ def enhance_image(image, style="Normal"):
         img = sharpen(img)
 
     elif style == "Warm":
-        img[:,:,0] = np.clip(img[:,:,0]*1.1,0,255)
+        img[:,:,0] = np.clip(img[:,:,0] * 1.1, 0, 255)
 
     return img
 
+# 🏠 Home route
 @app.route('/')
 def home():
     return "App is running 🔥"
 
+# 📸 API
 @app.route('/enhance', methods=['POST'])
 def enhance():
+    if 'image' not in request.files:
+        return {"error": "No image uploaded"}, 400
+
     file = request.files['image']
     style = request.form.get("style", "Normal")
 
@@ -63,11 +99,12 @@ def enhance():
     enhanced = enhance_image(image, style)
 
     img_io = io.BytesIO()
-    Image.fromarray(enhanced).save(img_io, 'JPEG')
+    Image.fromarray(enhanced).save(img_io, 'JPEG', quality=95)
     img_io.seek(0)
 
     return send_file(img_io, mimetype='image/jpeg')
 
+# 🚀 Run
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port)
