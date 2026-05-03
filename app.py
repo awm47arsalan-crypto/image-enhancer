@@ -33,27 +33,32 @@ def auto_brightness_contrast(image, clip_hist_percent=1):
         maximum_gray -= 1
 
     if maximum_gray - minimum_gray == 0:
-        return image  # safety
+        return image
 
     alpha = 255 / (maximum_gray - minimum_gray)
     beta = -minimum_gray * alpha
 
     return cv2.convertScaleAbs(image, alpha=alpha, beta=beta)
 
-# 🎬 Vignette
+# 🎬 VIGNETTE (FIXED)
 def apply_vignette(img):
     rows, cols = img.shape[:2]
+
     kernel_x = cv2.getGaussianKernel(cols, cols/2)
     kernel_y = cv2.getGaussianKernel(rows, rows/2)
     mask = kernel_y * kernel_x.T
     mask = mask / mask.max()
 
+    # FIX: convert to float
+    mask = mask.astype(np.float32)
+    img = img.astype(np.float32)
+
     for i in range(3):
         img[:,:,i] = img[:,:,i] * mask
 
-    return img
+    return np.clip(img, 0, 255).astype(np.uint8)
 
-# 🔪 Sharpen
+# 🔪 SHARPEN
 def sharpen(img):
     kernel = np.array([[0,-1,0],[-1,5,-1],[0,-1,0]])
     return cv2.filter2D(img, -1, kernel)
@@ -65,7 +70,7 @@ def enhance_image(image, style="Normal"):
     # Adaptive brightness
     img = auto_brightness_contrast(img)
 
-    # Controlled saturation
+    # Saturation control
     hsv = cv2.cvtColor(img, cv2.COLOR_RGB2HSV)
     hsv[:,:,1] = np.clip(hsv[:,:,1] * 1.2, 0, 255)
     img = cv2.cvtColor(hsv, cv2.COLOR_HSV2RGB)
@@ -78,14 +83,14 @@ def enhance_image(image, style="Normal"):
     elif style == "Warm":
         img[:,:,0] = np.clip(img[:,:,0] * 1.1, 0, 255)
 
-    return img
+    return img.astype(np.uint8)
 
-# 🏠 Health check
+# 🏠 HEALTH CHECK
 @app.route('/')
 def home():
     return "App is running 🔥"
 
-# 📸 ENHANCE API
+# 📸 API
 @app.route('/enhance', methods=['POST'])
 def enhance():
     if 'image' not in request.files:
@@ -95,21 +100,17 @@ def enhance():
     style = request.form.get("style", "Normal")
 
     try:
-        # Read safely
         image = Image.open(file).convert("RGB")
 
-        # Process
         enhanced = enhance_image(image, style)
 
-        # 🔥 FIX: ensure valid image format
+        # ensure valid format
         enhanced = np.clip(enhanced, 0, 255).astype(np.uint8)
 
-        # Convert to PIL
-        output_image = Image.fromarray(enhanced)
+        output = Image.fromarray(enhanced)
 
-        # Save to buffer
         img_io = io.BytesIO()
-        output_image.save(img_io, format='JPEG', quality=95)
+        output.save(img_io, format='JPEG', quality=95)
         img_io.seek(0)
 
         return send_file(img_io, mimetype='image/jpeg')
