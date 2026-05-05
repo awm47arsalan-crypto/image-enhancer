@@ -66,32 +66,45 @@ def apply_lut(img, lut):
 
 def enhance_image(image, style="Normal", lut="None"):
 
-    # 🔹 Base corrections
+    # 🔥 STEP 1: resize first (VERY IMPORTANT)
+    max_size = 1024
+    w, h = image.size
+
+    if max(w, h) > max_size:
+        scale = max_size / max(w, h)
+        image = image.resize((int(w*scale), int(h*scale)), Image.LANCZOS)
+
+    # 🔹 Base enhancement (lightweight)
     image = ImageEnhance.Brightness(image).enhance(1.05)
-    image = ImageEnhance.Contrast(image).enhance(1.12)
+    image = ImageEnhance.Contrast(image).enhance(1.1)
     image = ImageEnhance.Color(image).enhance(1.08)
-    image = ImageEnhance.Sharpness(image).enhance(1.15)
+    image = ImageEnhance.Sharpness(image).enhance(1.1)
 
-    # 🔹 Clarity
-    image = image.filter(ImageFilter.UnsharpMask(radius=1.2, percent=110))
-
-    # 🎬 Style grading
+    # 🎬 Cinematic (NO heavy full numpy)
     if style == "Cinematic":
-        image = cinematic_grade(image)
+        image = image.filter(ImageFilter.UnsharpMask(radius=1, percent=120))
 
-    elif style == "Warm":
+    # 🎨 LUT (lightweight)
+    if lut == "Warm":
         r, g, b = image.split()
-        r = r.point(lambda i: i * 1.08)
+        r = r.point(lambda i: i * 1.05)
         image = Image.merge("RGB", (r, g, b))
 
-    elif style == "Cool":
+    elif lut == "Cool":
         r, g, b = image.split()
-        b = b.point(lambda i: i * 1.08)
+        b = b.point(lambda i: i * 1.05)
         image = Image.merge("RGB", (r, g, b))
 
-    elif style == "Sharp Pro":
-        image = image.filter(ImageFilter.UnsharpMask(radius=2, percent=140))
+    elif lut == "Vintage":
+        r, g, b = image.split()
+        r = r.point(lambda i: i * 1.1)
+        b = b.point(lambda i: i * 0.9)
+        image = Image.merge("RGB", (r, g, b))
 
+    # ❌ UPSCALE DISABLED (memory killer)
+    # (baad me add karenge smarter way)
+
+    return image
     # 🎨 LUT apply
     if lut != "None":
         image = apply_lut(image, lut)
