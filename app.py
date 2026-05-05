@@ -8,30 +8,39 @@ import os
 app = Flask(__name__)
 CORS(app)
 
-# 🎬 Cinematic Tone Curve
-def cinematic_tone(img):
+# 🎬 Cinematic tone curve + highlight/shadow balance
+def cinematic_grade(img):
     img = np.array(img).astype(np.float32) / 255.0
 
     # S-curve contrast
-    img = (img - 0.5) * 1.3 + 0.5
+    img = (img - 0.5) * 1.25 + 0.5
     img = np.clip(img, 0, 1)
 
-    # Teal-Orange
-    r = img[:,:,0] * 1.08
-    g = img[:,:,1] * 1.02
-    b = img[:,:,2] * 0.92
+    r, g, b = img[:,:,0], img[:,:,1], img[:,:,2]
 
-    img = np.stack([r,g,b], axis=2)
+    # 🎨 Teal shadows, warm highlights
+    shadows = img < 0.4
+    highlights = img > 0.6
+
+    img[shadows] *= [0.95, 1.0, 1.05]
+    img[highlights] *= [1.05, 1.02, 0.95]
+
+    # 🔥 Skin tone protect (avoid too much red)
+    r = np.clip(r * 1.06, 0, 1)
+    g = np.clip(g * 1.02, 0, 1)
+    b = np.clip(b * 0.95, 0, 1)
+
+    img = np.stack([r, g, b], axis=2)
 
     return Image.fromarray((img * 255).astype(np.uint8))
 
 
-# 🎨 LUT presets (fast)
+# 🎨 LUT-style presets (film looks)
 def apply_lut(img, lut):
     img = np.array(img).astype(np.float32)
 
     if lut == "Teal & Orange":
-        img[:,:,0] *= 1.1
+        img[:,:,0] *= 1.08
         img[:,:,2] *= 0.9
 
     elif lut == "Moody":
@@ -44,45 +53,50 @@ def apply_lut(img, lut):
         img[:,:,2] *= 0.85
 
     elif lut == "Cool Film":
-        img[:,:,2] *= 1.15
-        img[:,:,0] *= 0.9
+        img[:,:,2] *= 1.12
+        img[:,:,0] *= 0.92
 
-    return Image.fromarray(np.clip(img,0,255).astype(np.uint8))
+    elif lut == "Soft Skin":
+        img[:,:,0] *= 1.03
+        img[:,:,1] *= 1.02
+        img = np.clip(img * 1.02, 0, 255)
+
+    return Image.fromarray(np.clip(img, 0, 255).astype(np.uint8))
 
 
 def enhance_image(image, style="Normal", lut="None"):
 
-    # 🔹 Base Enhancements (FAST)
-    image = ImageEnhance.Brightness(image).enhance(1.08)
-    image = ImageEnhance.Contrast(image).enhance(1.15)
-    image = ImageEnhance.Sharpness(image).enhance(1.2)
-    image = ImageEnhance.Color(image).enhance(1.1)
+    # 🔹 Base corrections
+    image = ImageEnhance.Brightness(image).enhance(1.05)
+    image = ImageEnhance.Contrast(image).enhance(1.12)
+    image = ImageEnhance.Color(image).enhance(1.08)
+    image = ImageEnhance.Sharpness(image).enhance(1.15)
 
-    # 🔹 Slight clarity
-    image = image.filter(ImageFilter.UnsharpMask(radius=1, percent=120))
+    # 🔹 Clarity
+    image = image.filter(ImageFilter.UnsharpMask(radius=1.2, percent=110))
 
-    # 🎬 Style
+    # 🎬 Style grading
     if style == "Cinematic":
-        image = cinematic_tone(image)
+        image = cinematic_grade(image)
 
     elif style == "Warm":
         r, g, b = image.split()
-        r = r.point(lambda i: i * 1.1)
+        r = r.point(lambda i: i * 1.08)
         image = Image.merge("RGB", (r, g, b))
 
     elif style == "Cool":
         r, g, b = image.split()
-        b = b.point(lambda i: i * 1.1)
+        b = b.point(lambda i: i * 1.08)
         image = Image.merge("RGB", (r, g, b))
 
     elif style == "Sharp Pro":
-        image = image.filter(ImageFilter.UnsharpMask(radius=2, percent=150))
+        image = image.filter(ImageFilter.UnsharpMask(radius=2, percent=140))
 
-    # 🎨 LUT
+    # 🎨 LUT apply
     if lut != "None":
         image = apply_lut(image, lut)
 
-    # 📏 SAFE UPSCALE
+    # 📏 Smart upscale (safe)
     w, h = image.size
     if w < 1280:
         scale = 1280 / w
