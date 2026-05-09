@@ -142,7 +142,13 @@ def enhance():
         output = enhance_image(image, style, lut)
 
         img_io = io.BytesIO()
-        output.save(img_io, format='JPEG', quality=92)
+        output.save(
+    img_io,
+    format="JPEG",
+    quality=98,      # High quality
+    optimize=True,   # Better compression without visible loss
+    subsampling=0    # Preserve color detail
+)
         img_io.seek(0)
 
         return send_file(img_io, mimetype='image/jpeg')
