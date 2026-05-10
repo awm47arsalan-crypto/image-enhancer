@@ -137,13 +137,15 @@ def enhance():
         style = request.form.get("style", "Normal")
         lut = request.form.get("lut", "None")
 
-        image = Image.open(file).convert("RGB")
-        original_format = image.format if image.format else "JPEG"
+       image = Image.open(file.stream)
+original_format = image.format if image.format else "JPEG"
+image = image.convert("RGB")
 
         output = enhance_image(image, style, lut)
 
-        img_io = io.BytesIO()
-       save_format = "PNG" if original_format.upper() == "PNG" else "JPEG"
+       img_io = BytesIO()
+
+save_format = "PNG" if str(original_format).upper() == "PNG" else "JPEG"
 
 if save_format == "PNG":
     output.save(img_io, format="PNG")
@@ -157,7 +159,9 @@ else:
         subsampling=0
     )
     mimetype = "image/jpeg"
-        img_io.seek(0)
+
+img_io.seek(0)
+
 return send_file(
     img_io,
     mimetype=mimetype,
