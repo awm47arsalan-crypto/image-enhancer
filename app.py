@@ -67,7 +67,7 @@ def apply_lut(img, lut):
 def enhance_image(image, style="Normal", lut="None"):
 
     # 🔥 STEP 1: resize first (VERY IMPORTANT)
-    max_size = 1024
+    max_size = 2160
     w, h = image.size
 
     if max(w, h) > max_size:
@@ -138,20 +138,31 @@ def enhance():
         lut = request.form.get("lut", "None")
 
         image = Image.open(file).convert("RGB")
+        original_format = image.format if image.format else "JPEG"
 
         output = enhance_image(image, style, lut)
 
         img_io = io.BytesIO()
-        output.save(
-    img_io,
-    format="JPEG",
-    quality=98,      # High quality
-    optimize=True,   # Better compression without visible loss
-    subsampling=0    # Preserve color detail
-)
-        img_io.seek(0)
+       save_format = "PNG" if original_format.upper() == "PNG" else "JPEG"
 
-        return send_file(img_io, mimetype='image/jpeg')
+if save_format == "PNG":
+    output.save(img_io, format="PNG")
+    mimetype = "image/png"
+else:
+    output.save(
+        img_io,
+        format="JPEG",
+        quality=100,
+        optimize=False,
+        subsampling=0
+    )
+    mimetype = "image/jpeg"
+        img_io.seek(0)
+return send_file(
+    img_io,
+    mimetype=mimetype,
+    as_attachment=False
+)
 
     except Exception as e:
         print("ERROR:", str(e))
